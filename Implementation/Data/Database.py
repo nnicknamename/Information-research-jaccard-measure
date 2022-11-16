@@ -3,7 +3,6 @@ from pymongo import MongoClient
 
 from Data.Corpus import *
 
-#kxZgDBEwIHkoo9Jd
 class Database:
     def __init__(self,password):
         self.dbname=self.get_database(password)
