@@ -4,10 +4,13 @@ import pandas as pd
 import re
 import pickle
 import numpy as np
+from nltk.stem.snowball import SnowballStemmer
+
 class Indexer:
     def __init__(self,corpus:Corpus=None,file_name:str=None):
         assert corpus is not None or file_name is not None ,"a corpus or a file should be provided"
         self.en_mod=spacy.load('en_core_web_sm')
+        self.stemmer = SnowballStemmer(language='english')   
         if(file_name is not None):
             self.load(file_name)
         else:
@@ -35,11 +38,15 @@ class Indexer:
         self.terms=pickle.load(file)
         self.tf_idf=pickle.load(file)
         file.close()
+    def word_process(self,doc):
+        text=re.sub(r"[^a-zA-Z, ]",' ',doc)
+        return pd.DataFrame([self.stemmer.stem(word.text)  for word in self.en_mod(text) if not word.is_punct and not word.is_stop and not word.is_space and not word.is_digit])
     def pre_process(self,corpus:Corpus):
         corpus_tokens=[]
         for doc in corpus:
-            text=re.sub(r"[^a-zA-Z, ]",' ',doc['text'])
-            tokens=pd.DataFrame([word.lemma_  for word in self.en_mod(text) if not word.is_punct and not word.is_stop and not word.is_space and not word.is_digit])
+            #text=re.sub(r"[^a-zA-Z, ]",' ',doc['text'])
+            #tokens=pd.DataFrame([self.stemmer.stem(word.lemma_)  for word in self.en_mod(text) if not word.is_punct and not word.is_stop and not word.is_space and not word.is_digit])
+            tokens=self.word_process(doc['text'])
             corpus_tokens.append(tokens)
         return corpus_tokens
 
@@ -50,8 +57,9 @@ class Indexer:
         return self.term_frequencys
 
     def index(self,query,binary=True):
-        text=re.sub(r"[^a-zA-Z, ]",' ',query)
-        tokens=pd.DataFrame([word.lemma_  for word in self.en_mod(text) if not word.is_punct and not word.is_stop and not word.is_space and not word.is_digit])
+        # text=re.sub(r"[^a-zA-Z, ]",' ',query)
+        # tokens=pd.DataFrame([word.lemma_  for word in self.en_mod(text) if not word.is_punct and not word.is_stop and not word.is_space and not word.is_digit])
+        tokens=self.word_process(query)
         if not binary:
             return np.in1d(self.terms,tokens).astype(int)/tokens.size* np.log(self.term_frequencys.shape[0] / self.nb_docs_with_word)
         else:
@@ -76,18 +84,25 @@ class Indexer:
         return self.tf_idf
 
     def get_docs_with_jaccard(self,query):
-        q=self.index(query)
-        binary_index=((self.term_frequencys>0).astype(int))
-        similaritys=np.logical_and(q,binary_index).sum(axis=1)/np.logical_or(q,binary_index).sum(axis=1)
-        return np.where(np.flip(np.sort(similaritys))==similaritys)
-
-    def get_docs_with_jaccard_01(self,query):
-
+        q=self.index(query,binary=False)
+        c=np.repeat([q],self.get_tf_idf().shape[0],axis=0)*self.get_tf_idf()
+        return c.sum(axis=1)/((q**2).sum()+(self.get_tf_idf()**2).sum(axis=1)-c.sum(axis=1))
+    def get_docs_with_Dice(self,query):
         q=self.index(query,binary=False)
 
         c=np.repeat([q],self.get_tf_idf().shape[0],axis=0)*self.get_tf_idf()
-        return c.sum(axis=1)/((q**2).sum()+(self.get_tf_idf()**2).sum(axis=1)-c.sum(axis=1))
-
+        return (2*c.sum(axis=1))/((q**2).sum()+(self.get_tf_idf()**2).sum(axis=1))
+        
+    def get_documents_for_query(self,query,thresh=0.05,method='jaccard'):
+        if method=='jaccard':
+            similaritys=self.get_docs_with_jaccard(query)
+        elif method=='Dice':
+            similaritys=self.get_docs_with_Dice(query)
+        else:
+            raise KeyError("method does not exist")
+        similaritys_idx=np.flip(np.argsort(similaritys))
+        res=similaritys_idx[similaritys[similaritys_idx]>thresh]
+        return res
     def get_terms(self):
         return self.terms
         

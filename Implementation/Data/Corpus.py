@@ -34,7 +34,7 @@ class CranCorpus(Corpus):
         for i,doc in enumerate(corpus_raw_documents):
             match=re.match(r"\.I (\d+)\n\.T((.|\n)*)\.A((.|\n)*)\.B((.|\n)*)\.W((.|\n)*)",doc)
             assert match is not None ,"Error parsing the file on document "+str(i)
-            res={"idx":int(match.groups()[0].replace("\n",'')),"title":match.groups()[1].replace("\n",''),"author":match.groups()[3].replace("\n",''),"bib":match.groups()[5].replace("\n",''),"text":match.groups()[7].replace("\n",'')}
+            res={"idx":int(match.groups()[0].replace("\n",'')),"title":match.groups()[1].replace("\n",''),"author":match.groups()[3].replace("\n",''),"bib":match.groups()[5].replace("\n",''),"text":match.groups()[7].replace("\n",' ')}
             if(self.match_not_empty(res)):
                 documents.append(res)
             else:
@@ -54,6 +54,7 @@ class CranQueryCorpus(Corpus):
     def __init__(self, file_mame):
         super().__init__(file_mame,'cran_query')
         self.documents=self.load_data()
+        [document.update({'_id':i})  for i,document in enumerate(self.documents)]
     def get_raw_docs(self):
         file=open(self.file_name,'r')
         corpusLines=file.readlines()
@@ -66,7 +67,7 @@ class CranQueryCorpus(Corpus):
         for i,doc in enumerate(corpus_raw_documents):
             match=re.match(r"\.I (\d+)\n\.W((.|\n)*)",doc)
             assert match is not None ,"Error parsing the file on document "+str(i)
-            documents.append({"idx":int(match.groups()[0].replace("\n",'')),"text":match.groups()[1].replace("\n",'')})
+            documents.append({"idx":int(match.groups()[0].replace("\n",'')),"text":match.groups()[1].replace("\n",' ')})
         return documents
             
     def __len__(self):
